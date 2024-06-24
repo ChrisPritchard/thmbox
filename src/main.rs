@@ -58,7 +58,7 @@ async fn print_vm_status(client: &Client) -> Result<(), Box<dyn std::error::Erro
     }
 
     for vm in running.data {
-        println!("title:\t\t{}\nexpires:\t{}", vm.title, vm.expires);
+        println!("title:\t\t{}\nexpires in:\t{} minutes", vm.title, vm.minutes_remaining());
         match (vm.remote.private_ip, vm.credentials) {
             (Some(private_ip), Some(credentials)) => 
                  println!("internal ip:\t{}\n  public ip:\t{}\n  username:\t{}\n  password:\t{}\n", 

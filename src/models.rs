@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 
 #[derive(serde::Deserialize)]
 pub struct RunningResponse {
@@ -14,6 +16,19 @@ pub struct VmData {
     pub internal_ip: String,
     pub credentials: Option<VmCredentials>,
     pub remote: VmRemote
+}
+
+impl VmData {
+    pub fn minutes_remaining(self: &Self) -> i64 {
+        let expires_parsed = DateTime::parse_from_rfc3339(&self.expires)
+            .expect("Failed to parse ISO date")
+            .with_timezone(&Utc);
+
+        let now = Utc::now();
+        let duration = expires_parsed.signed_duration_since(now);
+        
+        duration.num_minutes()
+    }
 }
 
 #[derive(serde::Deserialize)]
