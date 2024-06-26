@@ -4,7 +4,8 @@ use chrono::{DateTime, Utc};
 #[derive(serde::Deserialize)]
 pub struct RunningResponse {
     pub status: String,
-    pub data: Vec<VmData>
+    pub message: Option<String>,
+    pub data: Option<Vec<VmData>>
 }
 
 #[derive(serde::Deserialize)]
