@@ -1,11 +1,10 @@
 use chrono::{DateTime, Utc};
 
-
 #[derive(serde::Deserialize)]
 pub struct RunningResponse {
     pub status: String,
     pub message: Option<String>,
-    pub data: Option<Vec<VmData>>
+    pub data: Option<Vec<VmData>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -16,7 +15,7 @@ pub struct VmData {
     #[serde(alias = "internalIP")]
     pub internal_ip: String,
     pub credentials: Option<VmCredentials>,
-    pub remote: VmRemote
+    pub remote: VmRemote,
 }
 
 impl VmData {
@@ -27,7 +26,7 @@ impl VmData {
 
         let now = Utc::now();
         let duration = expires_parsed.signed_duration_since(now);
-        
+
         duration.num_minutes()
     }
 }
@@ -35,11 +34,11 @@ impl VmData {
 #[derive(serde::Deserialize)]
 pub struct VmCredentials {
     pub username: String,
-    pub password: String
+    pub password: String,
 }
 
 #[derive(serde::Deserialize)]
 pub struct VmRemote {
     #[serde(alias = "privateIP")]
-    pub private_ip: Option<String>
+    pub private_ip: Option<String>,
 }

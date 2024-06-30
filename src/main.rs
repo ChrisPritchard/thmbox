@@ -1,8 +1,11 @@
-use std::{error::Error, fmt::Display, result};
+use std::error::Error;
 
 use clap::{arg, command};
 use get_cookies::read_cookie_with_title;
-use reqwest::{header::{self, HeaderValue, COOKIE}, Client};
+use reqwest::{
+    header::{self, HeaderValue, COOKIE},
+    Client,
+};
 
 mod models;
 use models::RunningResponse;
@@ -25,48 +28,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     if cookie.is_none() || !has_keys {
-        cookie = Some(fetch_cookie_from_browser(None).await?)
+        cookie = Some(fetch_cookie_from_browser().await?)
     }
 
     let cookie = cookie.unwrap();
-    let result = print_vm_status(&cookie).await;
-    if let Err(e) = result {
-        if let Some(_) = e.downcast_ref::<UnauthorizedError>() {
-            let bad_cookie = cookie.split(";").find(|s| s.starts_with("connect.sid=")).unwrap();
-            println!("this cookie is invalid: {bad_cookie}");
-            let cookie = fetch_cookie_from_browser(Some(&bad_cookie)).await?;
-            println!("new cookie: {cookie}");
-            print_vm_status(&cookie).await?
-        } else {
-            panic!("unknown error: {:?}", e);
-        }
-    }
-    // match  {
-    //     Ok(_) => (),
-    //     Err(e) => {
-    //         if let Some(_) =  {
-    //             let bad_cookie = cookie.split(";").find(|s| s.starts_with("connect.sid=")).unwrap();
-    //             let cookie = Some(fetch_cookie_from_browser(Some(&bad_cookie)).await?);
-    //             let cookie = cookie.unwrap();
-    //             print_vm_status(&cookie).await?
-    //         } else {
-    //             
-    //         }
-    //     }
-    // }
+    print_vm_status(&cookie).await?;
 
     Ok(())
 }
 
-async fn fetch_cookie_from_browser(invalid_cookie_to_ignore: Option<&str>) -> Result<String, Box<dyn Error>> {
+async fn fetch_cookie_from_browser() -> Result<String, Box<dyn Error>> {
     let url = "https://tryhackme.com/dashboard";
     let title = "Please log into TryHackMe";
-    let cookie = 
-        if invalid_cookie_to_ignore.is_none() {
-            read_cookie_with_title(&url, |cookie_str: &String| cookie_str.contains("_cioid"), title).await?
-        } else {
-            read_cookie_with_title(&url, |cookie_str: &String| cookie_str.contains("_cioid"), title).await?
-        };
+    let cookie = read_cookie_with_title(
+        &url,
+        |cookie_str: &String| cookie_str.contains("_cioid"),
+        title,
+    )
+    .await?;
     Ok(cookie)
 }
 
@@ -75,8 +54,8 @@ fn create_client_with_cookie(cookie: &str) -> Result<Client, Box<dyn Error>> {
     headers.insert(COOKIE, HeaderValue::from_str(&cookie).unwrap()); // this is much more difficult than it needs to be
     let client = reqwest::Client::builder()
         .default_headers(headers)
-        .proxy(reqwest::Proxy::all("http://127.0.0.1:8080")?)
-        .danger_accept_invalid_certs(true)
+        // .proxy(reqwest::Proxy::all("http://127.0.0.1:8080")?)
+        // .danger_accept_invalid_certs(true)
         .build()?;
 
     Ok(client)
@@ -85,17 +64,19 @@ fn create_client_with_cookie(cookie: &str) -> Result<Client, Box<dyn Error>> {
 async fn print_vm_status(cookie: &str) -> Result<(), Box<dyn Error>> {
     let client = create_client_with_cookie(cookie)?;
     let url = "https://tryhackme.com/api/v2/vms/running";
-    let running = client.get(url).send().await?.json::<RunningResponse>().await?;
+    let running = client
+        .get(url)
+        .send()
+        .await?
+        .json::<RunningResponse>()
+        .await?;
 
     if running.status != "success" {
         match running.message {
-            Some(s) if s == "Unauthorized" => {
-                return Err(Box::new(UnauthorizedError{}));
-            },
             Some(message) => eprintln!("failed to request VM status: {message}"),
-            _ => eprintln!("failed to request VM status - no reason given")
+            _ => eprintln!("failed to request VM status - no reason given"),
         }
-        return Ok(())
+        return Ok(());
     }
 
     let data = running.data.unwrap();
@@ -106,25 +87,19 @@ async fn print_vm_status(cookie: &str) -> Result<(), Box<dyn Error>> {
     }
 
     for vm in data {
-        println!("title:\t\t{}\nexpires in:\t{} minutes", vm.title, vm.minutes_remaining());
+        println!(
+            "title:\t\t{}\nexpires in:\t{} minutes",
+            vm.title,
+            vm.minutes_remaining()
+        );
         match (vm.remote.private_ip, vm.credentials) {
-            (Some(private_ip), Some(credentials)) => 
-                 println!("internal ip:\t{}\n  public ip:\t{}\n  username:\t{}\n  password:\t{}\n", 
-                    private_ip, vm.internal_ip, credentials.username, credentials.password),
-            _ => println!("internal ip:\t{}\n", vm.internal_ip)
+            (Some(private_ip), Some(credentials)) => println!(
+                "internal ip:\t{}\n  public ip:\t{}\n  username:\t{}\n  password:\t{}\n",
+                private_ip, vm.internal_ip, credentials.username, credentials.password
+            ),
+            _ => println!("internal ip:\t{}\n", vm.internal_ip),
         }
     }
 
     Ok(())
-}
-
-#[derive(Debug)]
-struct UnauthorizedError {}
-
-impl Error for UnauthorizedError {}
-
-impl Display for UnauthorizedError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("unauthorized")
-    }
 }
