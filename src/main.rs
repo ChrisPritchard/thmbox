@@ -19,20 +19,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
             )
             .required(false),
         )
+        .arg(
+            arg!(
+                -p --proxy <PROXY_ADDRESS> "Route requests through proxy"
+            )
+            .required(false),
+        )
         .get_matches();
 
     let mut cookie = matches.get_one::<String>("cookie").map(|s| s.to_owned());
+    let proxy = matches.get_one::<String>("proxy").map(|s| s.to_owned());
+
     let has_keys = cookie.is_some() && cookie.clone().unwrap().contains("connect.sid=");
-    if !has_keys {
+    if cookie.is_some() && !has_keys {
         println!("invalid cookie specified (missing required keys)\nspawning browser")
     }
-
     if cookie.is_none() || !has_keys {
         cookie = Some(fetch_cookie_from_browser().await?)
     }
 
     let cookie = cookie.unwrap();
-    print_vm_status(&cookie).await?;
+    let client = create_client_with_cookie(&cookie, proxy)?;
+    print_vm_status(&client).await?;
 
     Ok(())
 }
@@ -49,20 +57,24 @@ async fn fetch_cookie_from_browser() -> Result<String, Box<dyn Error>> {
     Ok(cookie)
 }
 
-fn create_client_with_cookie(cookie: &str) -> Result<Client, Box<dyn Error>> {
+fn create_client_with_cookie(
+    cookie: &str,
+    proxy: Option<String>,
+) -> Result<Client, Box<dyn Error>> {
     let mut headers = header::HeaderMap::new();
     headers.insert(COOKIE, HeaderValue::from_str(&cookie).unwrap()); // this is much more difficult than it needs to be
-    let client = reqwest::Client::builder()
-        .default_headers(headers)
-        // .proxy(reqwest::Proxy::all("http://127.0.0.1:8080")?)
-        // .danger_accept_invalid_certs(true)
-        .build()?;
+    let mut client = reqwest::Client::builder().default_headers(headers);
+    if let Some(p) = proxy {
+        client = client
+            .proxy(reqwest::Proxy::all(p)?)
+            .danger_accept_invalid_certs(true)
+    }
+    let client = client.build()?;
 
     Ok(client)
 }
 
-async fn print_vm_status(cookie: &str) -> Result<(), Box<dyn Error>> {
-    let client = create_client_with_cookie(cookie)?;
+async fn print_vm_status(client: &Client) -> Result<(), Box<dyn Error>> {
     let url = "https://tryhackme.com/api/v2/vms/running";
     let running = client
         .get(url)
